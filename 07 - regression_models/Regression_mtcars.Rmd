@@ -1,0 +1,107 @@
+---
+title: "Regression Models Course Project"
+author: "Motor Trend"
+date: "September 02, 2018"
+output: pdf_document
+---
+
+## Executive Summary
+
+In this edition of ***Motor Trend***, we look at a data set of a collection of cars from our 1974 archives. Using modern 
+day data science and visualization tools, we explore the relationship between a set of variables and miles per gallon 
+(MPG) and then answer the following questions for you:
+1. Is an automatic or manual transmission better for MPG?
+2. What is the difference in MPG for automatic and manual transmissions?
+
+## Exploratory Analysis
+
+The  `mtcars` data set comprises fuel consumption and 10 aspects of automobile design and performance for 32 autombiles 
+(1973-74 models). Here's a glance at the first few rows of the data:
+
+```{r preview, echo = TRUE}
+data("mtcars")
+head(mtcars)
+```
+Our key variables of interest are `am`: Transmission type (0 = automatic, 1 = manual) and `mpg`: Miles/US gallon. Let's 
+take a look at the difference in means of MPG for automatic and manual transmission:
+
+```{r mpgdiff, echo = TRUE}
+aggregate(mpg ~ am, data = mtcars, FUN = mean)
+```
+It appears that cars with manual transmission give about 7mpg more compared to cars with automatic transmission. This 
+looks like a significant difference and we will use a *t-test* to find out:
+
+```{r t-test, echo = TRUE}
+t.test(mtcars$mpg[mtcars$am == 0], mtcars$mpg[mtcars$am == 1], conf.level = 0.95)
+```
+Since the *p-value is less than 0.05*, we reject the null hypothesis at 95% confidence level and conclude that the MPG 
+differences are indeed statistically significant.
+
+## Regression Analysis
+
+Let's have a closer look at the correlations of `mpg` to the other variables in `mtcars`:
+```{r cor-test, echo = TRUE}
+round(cor(mtcars)[, 1], 3)
+```
+From the correlation data, there is a strong positive and inverse correlation between MPG and the other variables. Next, 
+we will take a look at the regression model for MPG and transmission. 
+
+```{r reg-model, echo = TRUE}
+fit1 <- lm(mpg ~ am, data = mtcars)
+summary(fit1)
+```
+This regression model shows that the average MPG for automatic transmission is 17.1, and the MPG increases by 7.2 for 
+manual transmission. However, the *R^2^* value is 0.36, which indicates this model only explains 36% of the variance. 
+Thus we build a few multivariate linear regression models. 
+
+```{r reg-model-add, echo = TRUE}
+fit2 <- lm(mpg ~ am + cyl, data = mtcars)
+fit3 <- lm(mpg ~ am + cyl + disp, data = mtcars)
+fit4 <- lm(mpg ~ am + cyl + disp + hp, data = mtcars)
+fit5 <- lm(mpg ~ am + cyl + disp + hp + wt, data = mtcars)
+fit6 <- lm(mpg ~ am + cyl + disp + hp + wt + drat, data = mtcars)
+fit7 <- lm(mpg ~ am + cyl + disp + hp + wt + drat + vs, data = mtcars)
+anova(fit1, fit2, fit3, fit4, fit5, fit6, fit7)
+```
+From the probabilities in the above anova table, we can say that `am`, `cyl`, `hp` and `wt` are the significant 
+predictors of `mpg` at 95% confidence interval. 
+
+```{r better-model, echo = TRUE}
+better_model <- lm(mpg ~ am + cyl + hp + wt, data = mtcars)
+summary(better_model)
+```
+
+## Conclusions
+
+1. The above multivariate model shows that cars with manual transmission give better MPG compared to automatic 
+transmission. 
+2. In contrast to our initial regression model which shows a huge difference in mileage for manual and automatic cars, 
+the multivariate model indicates that cars with manual transmission give 1.48mpg higher than automatic transmission cars 
+when other variables like number of cylinders (`cyl`), gross horsepower (`hp`) and weight (`wt`) are also taken into 
+account. Moreover, this is a better regression model as it explains 85% of the variance. 
+
+## Appendix
+
+#### Plot - 1: Boxplot of MPG by transmission type
+```{r boxplot, echo = FALSE, fig.align = "center", fig.height = 5, fig.width = 8}
+boxplot(mpg ~ am, data = mtcars, col = c("red", "blue"), xlab = "Transmission type", 
+        ylab = "Miles per gallon (US)")
+```
+
+#### Plot - 2: Correlation heatmap of all variables
+```{r heatmap, echo = FALSE, fig.align = "center", fig.height = 5, fig.width = 8}
+suppressMessages(library(gplots))
+suppressMessages(library(RColorBrewer))
+data.plot <- round(cor(mtcars), 3)
+col_palette <- colorRampPalette(c("blue", "white", "red"))(n = 299)
+col_breaks <- c(seq(-1, 0, length = 100), seq(0.01, 0.8, length = 100), seq(0.81, 1 , length = 100))
+heatmap.2(data.plot, cellnote = data.plot, margins = c(4, 0), notecol = "black", density.info = "none", 
+          trace = "none", col = col_palette, breaks = col_breaks, dendrogram = "none", keysize = 1, 
+          lmat = rbind(c(6, 1, 2), c(5, 4, 3)), lwid = c(1, 10, 1), lhei = c(5, 1.5))
+```
+
+#### Plot - 3: Analysis of residuals
+```{r analysis, echo = FALSE, fig.align = "center", fig.height = 5, fig.width = 8}
+par(mfrow = c(2, 2))
+plot(better_model)
+```
