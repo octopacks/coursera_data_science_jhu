@@ -1,0 +1,6 @@
+library(data.table)
+gdp <- fread("gdp.csv", skip = 4, nrows = 190, select = c(1, 2, 4, 5), col.names = c("CountryCode", "Rank", "Country", "GDP"))
+edudata <- fread("edudata.csv")
+cdata <- merge(gdp, edudata, by = "CountryCode")
+value <- grep("Fiscal year end: June", cdata$`Special Notes`, ignore.case = TRUE, value = FALSE)
+length(value)

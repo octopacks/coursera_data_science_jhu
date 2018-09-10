@@ -1,0 +1,5 @@
+library(data.table)
+gdp <- fread("gdp.csv", skip = 4, nrows = 190, select = c(1, 2, 4, 5), col.names = c("Code", "Rank", "countryNames", "GDP"))
+values <- as.numeric(gsub(",", "", gdp$GDP))
+mean(values)
+grep("^United", gdp$countryNames)
