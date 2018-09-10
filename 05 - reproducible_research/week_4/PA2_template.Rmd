@@ -1,0 +1,294 @@
+---
+title: "An analysis of severe weather events on U.S. health and economy"
+date: "November 16, 2017"
+output: html_document
+---
+
+------------------------------------------------------------------------------------------------------------------
+
+# Synopsis 
+
+This report explores and analyzes data on severe weather events obtained from the U.S. National Oceanic and Atmospheric
+Administration's (NOAA) Storm database. The data can be downloaded from [this link][1]. The events in the database 
+start in the year 1950 and end in November 2011. Of particular interest to us in this analysis are observing the damage 
+to life and economy caused by different weather events. The most catastrophic weather events with respect to public 
+health and economic impact are then identified. This would aid in prioritizing resources for different types of events. 
+
+# Data Processing
+
+Contents of the data were viewed and analyzed with the help of a software package called **RStudio**. The R code 
+downloads the zip file containing the data for you, extracts the contents of the file and loads the data into a 
+readable tabular format using the **data.table** package. The code to do this is shown in the code chunk below:
+
+```{r Load, echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE}
+rm(list = ls())         # remove any variables in global environment 
+library(data.table)     # load data.table package
+
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"   # set download link to the database
+download.file(url, destfile = "./StormData.csv.bz2")            # download zip file with name as "StormData"
+
+data.in <- data.table(read.csv("StormData.csv.bz2", stringsAsFactors = FALSE))      # read data into R
+```
+
+As far as the scope of this report goes, not all columns in the raw dataset are required. The raw dataset is broken 
+down into 2 subsets: one to assess the impact of weather events on public health and another to assess the economic 
+impact. 
+
+The code chunk dealing with the public health subset, named "harm.health" is displayed below: 
+
+```{r Health, echo = TRUE, warning = FALSE, message = FALSE}
+# create subset 1 by selecting event type, fatalities and injuries from raw dataset:
+harm.health <- subset(data.in, select = c("EVTYPE", "FATALITIES", "INJURIES"))
+
+# create a new column equal to the sum of fatalities and injuries:
+harm.health$"TOTAL" <- harm.health$FATALITIES + harm.health$INJURIES
+
+# calculate the sum of fatalities, injuries and total number of affected people for each event type:
+harm.health <- aggregate(cbind(FATALITIES, INJURIES, TOTAL) ~ EVTYPE, harm.health, sum)
+
+# arrange subset 1 in decreasing order of total number of affected people:
+harm.health <- harm.health[order(-harm.health$TOTAL), ]
+```
+
+For the economic impact assessment, the damages are expressed in character values denoting hundreds, thousands, 
+millions and billions. For a significant number of observations, the damages are not well documented or some garbage 
+value is assigned. 
+
+The code chunk for appropriately converting the character values to numeric values and obtaining subset, named 
+"econ.clean", that deals with economic damage is displayed below:
+
+```{r Economy, echo = TRUE, warning = FALSE, message = FALSE}
+# take subset of event type, property and crop damage, property damage and crop damage multiplier exponent:
+econ.data <- subset(data.in, select = c("EVTYPE", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP"))
+
+# create new column containing appropriate numeric values as depicted by character values of property damage exponent: 
+econ.data$PMULT[econ.data$PROPDMGEXP == "" | econ.data$PROPDMGEXP == "-" | econ.data$PROPDMGEXP == "?" | 
+                          econ.data$PROPDMGEXP == "+"] <- 0
+econ.data$PMULT[econ.data$PROPDMGEXP == "0"] <- 10^0
+econ.data$PMULT[econ.data$PROPDMGEXP == "1"] <- 10^1
+econ.data$PMULT[econ.data$PROPDMGEXP == "2" | econ.data$PROPDMGEXP == "h" | econ.data$PROPDMGEXP == "H"] <- 10^2
+econ.data$PMULT[econ.data$PROPDMGEXP == "3" | econ.data$PROPDMGEXP == "k" | econ.data$PROPDMGEXP == "K"] <- 10^3
+econ.data$PMULT[econ.data$PROPDMGEXP == "4"] <- 10^4
+econ.data$PMULT[econ.data$PROPDMGEXP == "5"] <- 10^5
+econ.data$PMULT[econ.data$PROPDMGEXP == "6" | econ.data$PROPDMGEXP == "m" | econ.data$PROPDMGEXP == "M"] <- 10^6
+econ.data$PMULT[econ.data$PROPDMGEXP == "7"] <- 10^7
+econ.data$PMULT[econ.data$PROPDMGEXP == "8"] <- 10^8
+econ.data$PMULT[econ.data$PROPDMGEXP == "b" | econ.data$PROPDMGEXP == "B"] <- 10^9
+
+# create new column containing appropriate numeric values as depicted by character values of crop damage exponent:
+econ.data$CMULT[econ.data$CROPDMGEXP == "" | econ.data$CROPDMGEXP == "?"] <- 0
+econ.data$CMULT[econ.data$CROPDMGEXP == "0"] <- 10^0
+econ.data$CMULT[econ.data$CROPDMGEXP == "2"] <- 10^2
+econ.data$CMULT[econ.data$CROPDMGEXP == "k" | econ.data$CROPDMGEXP == "K"] <- 10^3
+econ.data$CMULT[econ.data$CROPDMGEXP == "m" | econ.data$CROPDMGEXP == "M"] <- 10^6
+econ.data$CMULT[econ.data$CROPDMGEXP == "B"] <- 10^9
+
+# calculate total amount of damage to property and damage to crops:
+econ.data$PROPERTY <- econ.data$PROPDMG * econ.data$PMULT
+econ.data$CROP <- econ.data$CROPDMG * econ.data$CMULT
+
+# create subset 2 by selecting event type, property damage amount and crop damage amount from "econ.data" subset:
+econ.clean <- subset(econ.data, select = c("EVTYPE", "PROPERTY", "CROP"))
+
+# create a new column equal to the sum of property damage amount and crop damage amount:
+econ.clean$"TOTAL" <- econ.clean$PROPERTY + econ.clean$CROP
+
+# calculate the sum of property, crop and overall damage amounts for each event type:
+econ.clean <- aggregate(cbind(PROPERTY, CROP, TOTAL) ~ EVTYPE, econ.clean, sum)
+
+# arrange subset 2 in decreasing order of total property and crop damage amount:
+econ.clean <- econ.clean[order(-econ.clean$TOTAL), ]
+```
+
+# Results
+
+A snapshot of the top 10 weather events that have the most severe impact on population health and economic damage is 
+shown below:
+
+```{r Tables, echo = TRUE, warning = FALSE, message = FALSE}
+head(harm.health, n = 10)
+head(econ.clean, n = 10)
+```
+
+```{r Maximums, echo = TRUE, warning = FALSE, message = TRUE}
+# event causing most number of fatalities 
+harm.health[which.max(harm.health$FATALITIES), ]
+
+# event causing most number of injuries 
+harm.health[which.max(harm.health$INJURIES), ]
+
+# event causing most number of fatalities and injuries combined
+harm.health[which.max(harm.health$TOTAL), ]
+
+# event causing most damage to property
+econ.clean[which.max(econ.clean$PROPERTY), ]
+
+# event causing most damage to crops
+econ.clean[which.max(econ.clean$CROP), ]
+
+# event causing most damage to property and crops combined
+econ.clean[which.max(econ.clean$TOTAL), ]
+```
+
+From these tables, we can observe that:  
+- **Tornadoes** cause the most number of fatalities  
+- **Tornadoes** cause the most number of injuries  
+- **Tornadoes** cause the most number of fatalities combined  
+- **Floods** cause the most damage to property  
+- **Droughts** cause the most damage to crops  
+- **Floods** cause the most damage to property and crops combined  
+
+Let us take a look at the names of all severe weather events:
+
+```{r Names, echo = TRUE, warning = FALSE, message = FALSE}
+harm.health$EVTYPE
+```
+
+If you take a closer look at the names of the weather events, you will observe that names of many events are repeated 
+(lower or upper case) or look similar. Some of them even are even spelt incorrectly.  
+
+Next, an attempt is made to choose the top 6 severe events (excluding events with similar names), search for events 
+with names similar to these 6 events and group all the into events into events with a common name.  
+
+For the events affecting population health, these 6 events are chosen: **TORNADO, HEAT, WIND, FLOODING, LIGHTNING, 
+STORM**  
+For the events affecting economy, these 6 events are chosen: **FLOODING, HURRICANE, TORNADO, STORM, HAIL, DROUGHT**  
+
+We must note that some of these events will overlap and will be repeated, but it will be interesting to see if the 
+order changes when the events are grouped under a common name.  
+
+```{r PopGroup, echo = TRUE, warning = FALSE, message = FALSE}
+# create an empty data table, data1, to store events affecting population health
+data1 <- data.frame()
+
+# search for all events containing the word "torn" and classify them under "TORNADO"
+data.temp <- harm.health[grep("torn", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "TORNADO"
+data1 <- rbind(data1, data.temp)
+
+# search for all events containing the word "heat" and classify them under "HEAT"
+data.temp <- harm.health[grep("heat", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "HEAT"
+data1 <- rbind(data1, data.temp)
+
+# search for all events containing the word "wind" and classify them under "WIND"
+data.temp <- harm.health[grep("wind", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "WIND"
+data1 <- rbind(data1, data.temp)
+
+# search for all events containing the word "flood" and classify them under "FLOODING"
+data.temp <- harm.health[grep("flood", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "FLOODING" 
+data1 <- rbind(data1, data.temp)
+
+# search for all events containing the word "lightn" and classify them under "LIGHTNING"
+data.temp <- harm.health[grep("lightn", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "LIGHTNING"
+data1 <- rbind(data1, data.temp)
+
+# search for all events containing the word "storm" and classify them under "STORM"
+data.temp <- harm.health[grep("storm", harm.health$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "STORM"
+data1 <- rbind(data1, data.temp)
+
+# calculate the sum of fatalities, injuries and total number of affected people for each event type:
+data1 <- aggregate(cbind(FATALITIES, INJURIES, TOTAL) ~ EVTYPE, data1, sum)
+
+# arrange data 1 in decreasing order of total number of affected people:
+data1 <- data1[order(-data1$TOTAL), ]
+```
+
+```{r EconGroup, echo = TRUE, warning = FALSE, message = FALSE}
+# create an empty data table, data2, to store events affecting economy
+data2 <- data.frame()
+
+# search for all events containing the word "flood" and classify them under "FLOODING"
+data.temp <- econ.clean[grep("flood", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "FLOODING"
+data2 <- rbind(data2, data.temp)
+
+# search for all events containing the word "hurr" and classify them under "HURRICANE"
+data.temp <- econ.clean[grep("hurr", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "HURRICANE"
+data2 <- rbind(data2, data.temp)
+
+# search for all events containing the word "torn" and classify them under "TORNADO"
+data.temp <- econ.clean[grep("torn", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "TORNADO" 
+data2 <- rbind(data2, data.temp)
+
+# search for all events containing the word "storm" and classify them under "STORM"
+data.temp <- econ.clean[grep("storm", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "STORM"
+data2 <- rbind(data2, data.temp)
+
+# search for all events containing the word "hail" and classify them under "HAIL"
+data.temp <- econ.clean[grep("hail", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "HAIL"
+data2 <- rbind(data2, data.temp)
+
+# search for all events containing the word "droug" and classify them under "DROUGHT"
+data.temp <- econ.clean[grep("droug", econ.clean$EVTYPE, ignore.case = TRUE), ]
+data.temp$EVTYPE <- "DROUGHT"
+data2 <- rbind(data2, data.temp)
+
+# calculate the sum of property, crop and overall damage amounts for each event type:
+data2 <- aggregate(cbind(PROPERTY, CROP, TOTAL) ~ EVTYPE, data2, sum)
+
+# arrange subset 2 in decreasing order of total property and crop damage amount:
+data2 <- data2[order(-data2$TOTAL), ]
+```
+
+A snapshot of the top 6 weather events after grouping is shown below:
+
+```{r Grouped, echo = TRUE, warning = FALSE, message = FALSE}
+data1
+data2
+```
+
+We see that the order has slightly changed, but the most severe events have still remained at the top.  
+
+The following multiple bar plots provide a pictorial visualization of the grouped data:
+
+```{r Plot1, echo = TRUE, warning = FALSE, message = FALSE, fig.height = 14, fig.width = 20, fig.cap = "Figure 1"}
+library(data.table)     # load data.table package
+library(ggplot2)        # load ggplot2 package
+# make bar plot for top 6 severe events affecting population health
+data1 <- melt(data1, id.vars = "EVTYPE")
+print(ggplot(data1, aes(x = EVTYPE, y = value)) + geom_bar(aes(fill = variable), width = 0.4, 
+                                                           position = position_dodge(width = 0.5), stat = "identity") + 
+          ggtitle("Top 6 catastrophic events with respect to population health") + 
+          theme(plot.title = element_text(size = 24, face = "bold")) + 
+          theme(axis.text.x = element_text(size = 18, hjust = 1, vjust = 1, angle = 45), 
+                axis.title.x = element_text(size = 22, face = "bold")) + 
+          theme(axis.text.y = element_text(size = 18), axis.title.y = element_text(size = 22, face = "bold")) +
+          theme(legend.text = element_text(size = 18), legend.key.height = unit(3, "lines"), 
+                legend.title = element_text(size = 22, face = "bold")) + 
+          ylab("Count") + xlab("Event Type"))
+```
+
+```{r Plot2, echo = TRUE, warning = FALSE, message = FALSE, fig.height = 14, fig.width = 20, fig.cap = "Figure 2"}
+library(data.table)     # load data.table package
+library(ggplot2)        # load ggplot2 package
+# make bar plot for top 6 severe events causing economic loss
+data2 <- melt(data2, id.vars = "EVTYPE")
+data2$value <- data2$value/10^9
+print(ggplot(data2, aes(x = EVTYPE, y = value)) + geom_bar(aes(fill = variable), width = 0.4, 
+                                                           position = position_dodge(width = 0.5), stat = "identity") + 
+          ggtitle("Top 6 catastrophic events in terms of economic damage") + 
+          theme(plot.title = element_text(size = 24, face = "bold")) + 
+          theme(axis.text.x = element_text(size = 18, hjust = 1, vjust = 1, angle = 45), 
+                axis.title.x = element_text(size = 22, face = "bold")) + 
+          theme(axis.text.y = element_text(size = 18), axis.title.y = element_text(size = 22, face = "bold")) +
+          theme(legend.text = element_text(size = 18), legend.key.height = unit(3, "lines"), 
+                legend.title = element_text(size = 22, face = "bold")) + 
+          ylab("Loss ( in billion USD )") + xlab("Event Type"))
+```
+
+A published report on RPubs can be found at [this link][2].
+
+<!--Set links below-->
+
+[1]: https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2  
+
+[2]: http://rpubs.com/octopacks/WeatherReport 
