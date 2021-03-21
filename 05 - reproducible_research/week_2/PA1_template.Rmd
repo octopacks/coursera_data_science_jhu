@@ -1,6 +1,6 @@
 ---
 title: "Reproducible Research: Course Project 1"
-author: "Roopak"
+author: "Octopacks"
 date: "November 9, 2017"
 output: html_document
 ---
